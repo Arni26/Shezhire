@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Шежіре — Семейное древо</title>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header class="header">
+    <div class="header__inner">
+      <div class="logo">
+        <span class="logo__icon">🌳</span>
+        <span class="logo__name">Шежіре</span>
+      </div>
+      <div class="header__actions">
+        <button class="hbtn" id="btnZoomIn">＋</button>
+        <button class="hbtn" id="btnZoomOut">－</button>
+        <button class="hbtn" id="btnReset">⟳</button>
+        <button class="hbtn hbtn--add" id="btnAddMember">+ Добавить</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- TREE CANVAS -->
+  <main class="canvas-wrap" id="canvasWrap">
+    <div class="canvas" id="canvas">
+      <svg class="svg-lines" id="svgLines"></svg>
+      <div class="nodes" id="nodes"></div>
+    </div>
+  </main>
+
+  <!-- LEGEND -->
+  <div class="legend">
+    <div class="legend__item"><span class="legend__dot legend__dot--male"></span> Мужчина</div>
+    <div class="legend__item"><span class="legend__dot legend__dot--female"></span> Женщина</div>
+    <div class="legend__item"><span class="legend__line legend__line--married"></span> Супруги</div>
+    <div class="legend__item"><span class="legend__line legend__line--child"></span> Дети</div>
+  </div>
+
+  <!-- MEMBER DETAIL PANEL -->
+  <aside class="panel" id="panel">
+    <button class="panel__close" id="panelClose">✕</button>
+    <div class="panel__avatar" id="panelAvatar"></div>
+    <h2 class="panel__name" id="panelName"></h2>
+    <div class="panel__year" id="panelYear"></div>
+    <div class="panel__meta" id="panelMeta"></div>
+    <div class="panel__relations" id="panelRelations"></div>
+    <div class="panel__actions">
+      <button class="pbtn pbtn--edit" id="panelEdit">Редактировать</button>
+      <button class="pbtn pbtn--child" id="panelAddChild">+ Ребёнок</button>
+    </div>
+  </aside>
+
+  <!-- ADD / EDIT MODAL -->
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal">
+      <button class="modal__close" id="modalClose">✕</button>
+      <h3 class="modal__title" id="modalTitle">Добавить человека</h3>
+      <form class="modal__form" id="memberForm">
+        <input type="hidden" id="fId"/>
+        <input type="hidden" id="fParentId"/>
+        <label>Имя
+          <input type="text" id="fName" placeholder="Имя Фамилия" required/>
+        </label>
+        <label>Год рождения
+          <input type="number" id="fBirth" placeholder="1980" min="1800" max="2025"/>
+        </label>
+        <label>Год смерти (если нет — пусто)
+          <input type="number" id="fDeath" placeholder="2020" min="1800" max="2025"/>
+        </label>
+        <label>Пол
+          <select id="fGender">
+            <option value="male">Мужской</option>
+            <option value="female">Женский</option>
+          </select>
+        </label>
+        <label>Примечание
+          <textarea id="fNote" placeholder="Профессия, город, факты..."></textarea>
+        </label>
+        <div class="modal__btns">
+          <button type="button" class="mbtn mbtn--cancel" id="modalCancel">Отмена</button>
+          <button type="submit" class="mbtn mbtn--save">Сохранить</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
