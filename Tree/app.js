@@ -171,7 +171,11 @@ function computeLayout() {
 // ── CANVAS PAN / ZOOM ─────────────────────────────────────────
 const wrap   = document.getElementById('canvasWrap');
 const canvas = document.getElementById('canvas');
-let scale = 0.85, tx = 80, ty = 40;
+
+const isMobile = () => window.innerWidth <= 700;
+let scale = isMobile() ? 0.45 : 0.85;
+let tx = isMobile() ? 10 : 80;
+let ty = isMobile() ? 30 : 40;
 let dragging = false, lastX = 0, lastY = 0;
 
 function applyTransform() {
@@ -180,6 +184,7 @@ function applyTransform() {
   if (el) el.textContent = Math.round(scale * 100) + '%';
 }
 
+// ── MOUSE ──
 wrap.addEventListener('mousedown', e => {
   if (e.target.closest('.person-card,.panel,.modal-overlay,.header,.legend,.minimap')) return;
   dragging = true; lastX = e.clientX; lastY = e.clientY;
@@ -199,13 +204,76 @@ wrap.addEventListener('wheel', e => {
   const mx = e.clientX - r.left, my = e.clientY - r.top;
   tx = mx - (mx - tx) * f;
   ty = my - (my - ty) * f;
-  scale = Math.min(2.5, Math.max(0.2, scale * f));
+  scale = Math.min(2.5, Math.max(0.15, scale * f));
   applyTransform();
 }, { passive: false });
 
-document.getElementById('btnZoomIn').onclick  = () => { scale = Math.min(2.5, scale * 1.15); applyTransform(); };
-document.getElementById('btnZoomOut').onclick = () => { scale = Math.max(0.2,  scale * 0.87); applyTransform(); };
-document.getElementById('btnReset').onclick   = () => { scale = 0.85; tx = 80; ty = 40; applyTransform(); };
+// ── TOUCH ──
+let touches = {};
+let lastPinchDist = null;
+let touchMoved = false;
+
+wrap.addEventListener('touchstart', e => {
+  if (e.target.closest('.panel,.modal-overlay,.header,.legend,.minimap')) return;
+  touchMoved = false;
+  [...e.changedTouches].forEach(t => {
+    touches[t.identifier] = { x: t.clientX, y: t.clientY };
+  });
+  if (e.touches.length === 2) {
+    const a = e.touches[0], b = e.touches[1];
+    lastPinchDist = Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY);
+  }
+}, { passive: true });
+
+wrap.addEventListener('touchmove', e => {
+  e.preventDefault();
+  touchMoved = true;
+
+  if (e.touches.length === 1) {
+    // Single finger — pan
+    const t = e.touches[0];
+    const prev = touches[t.identifier];
+    if (prev) {
+      tx += t.clientX - prev.x;
+      ty += t.clientY - prev.y;
+      applyTransform();
+    }
+    touches[t.identifier] = { x: t.clientX, y: t.clientY };
+
+  } else if (e.touches.length === 2) {
+    // Two fingers — pinch zoom
+    const a = e.touches[0], b = e.touches[1];
+    const dist = Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY);
+    if (lastPinchDist) {
+      const f = dist / lastPinchDist;
+      const cx = (a.clientX + b.clientX) / 2;
+      const cy = (a.clientY + b.clientY) / 2;
+      const r  = wrap.getBoundingClientRect();
+      const mx = cx - r.left, my = cy - r.top;
+      tx = mx - (mx - tx) * f;
+      ty = my - (my - ty) * f;
+      scale = Math.min(2.5, Math.max(0.15, scale * f));
+      applyTransform();
+    }
+    lastPinchDist = dist;
+    [...e.touches].forEach(t => { touches[t.identifier] = { x: t.clientX, y: t.clientY }; });
+  }
+}, { passive: false });
+
+wrap.addEventListener('touchend', e => {
+  [...e.changedTouches].forEach(t => delete touches[t.identifier]);
+  if (e.touches.length < 2) lastPinchDist = null;
+}, { passive: true });
+
+// ── BUTTONS ──
+document.getElementById('btnZoomIn').onclick  = () => { scale = Math.min(2.5, scale * 1.2); applyTransform(); };
+document.getElementById('btnZoomOut').onclick = () => { scale = Math.max(0.15, scale * 0.83); applyTransform(); };
+document.getElementById('btnReset').onclick   = () => {
+  scale = isMobile() ? 0.45 : 0.85;
+  tx = isMobile() ? 10 : 80;
+  ty = isMobile() ? 30 : 40;
+  applyTransform();
+};
 
 // ── RENDER ───────────────────────────────────────────────────
 function render() {

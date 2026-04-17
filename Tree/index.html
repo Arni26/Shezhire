@@ -88,6 +88,14 @@
     </div>
   </div>
 
+  <div class="touch-hint" id="touchHint">👆 Тяни пальцем — двигай · Два пальца — зум</div>
+
   <script src="app.js"></script>
+  <script>
+    // Hide touch hint after tap
+    document.getElementById('touchHint').addEventListener('touchstart', () => {
+      document.getElementById('touchHint').style.display = 'none';
+    }, { passive: true });
+  </script>
 </body>
 </html>
