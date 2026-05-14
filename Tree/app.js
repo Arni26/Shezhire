@@ -1,10 +1,7 @@
 // ============================================================
-//  ШЕЖІРЕ — Family Tree
+//  ШЕЖІРЕ — Family Tree  (collapsible)
 // ============================================================
 
-// ── DATA ────────────────────────────────────────────────────
-// parentId → id того родителя семьи (тот у кого есть parentId = "дитя семьи")
-// spouseId → супруг(а), вошедший в семью (у него/неё parentId = null)
 let people = [
   { id: 1,  name: 'Ниязхан',  birth: 1935, death: null, gender: 'male',   note: 'Основатель рода', spouseId: 2,  parentId: null },
   { id: 2,  name: 'Ақыш',    birth: 1938, death: null, gender: 'female', note: '',                spouseId: 1,  parentId: null },
@@ -58,35 +55,63 @@ let people = [
   { id: 36, name: 'Ерлен',    birth: 2014, death: null, gender: 'male',   note: '', spouseId: null, parentId: 12 },
   { id: 37, name: 'Ерәмір',  birth: 2022, death: null, gender: 'male',   note: '', spouseId: null, parentId: 12 },
 ];
-
-let nextId = 200;
+let nextId   = 200;
 let selectedId = null;
+let prevVisibleHeads = new Set();
+let prevLines        = new Set();
 
-// ── HELPERS ─────────────────────────────────────────────────
-const byId    = id => people.find(p => p.id === id);
-const emoji   = g  => g === 'male' ? '👨' : '👩';
-const yearLabel = p => {
+// anchor: keeps a clicked node visually in place after layout recalculation
+let anchorId   = null;
+let anchorOldX = 0;
+let anchorOldY = 0;
+
+function setAnchor(headId) {
+  const p = computeLayout();
+  anchorId   = headId;
+  anchorOldX = p[headId]?.x ?? 0;
+  anchorOldY = p[headId]?.y ?? 0;
+}
+
+// ── EXPAND STATE ─────────────────────────────────────────────
+// Set of headIds whose children are currently shown
+const expanded = new Set();
+
+// headId → parentHeadId (built by buildParentMap)
+let parentHeadMap = {};
+
+function buildParentMap() {
+  parentHeadMap = {};
+  people.filter(p => isHead(p.id)).forEach(h => {
+    headChildren(h.id).forEach(ch => {
+      if (!(ch.id in parentHeadMap)) parentHeadMap[ch.id] = h.id;
+    });
+  });
+}
+
+function isVisible(headId) {
+  const ph = parentHeadMap[headId];
+  if (ph === undefined) return true; // root — always visible
+  return expanded.has(ph) && isVisible(ph);
+}
+
+function collapseAll(headId) {
+  expanded.delete(headId);
+  headChildren(headId).forEach(ch => collapseAll(ch.id));
+}
+
+// ── HELPERS ──────────────────────────────────────────────────
+const byId      = id => people.find(p => p.id === id);
+const emoji     = g  => g === 'male' ? '👨' : '👩';
+const yearLabel = p  => {
   if (p.birth && p.death) return `${p.birth}–${p.death}`;
   if (p.birth) return String(p.birth);
   return '';
 };
 
-// ── LAYOUT CONSTANTS ─────────────────────────────────────────
-const SLOT_W  = 230;
-const GEN_H   = 180;
-const PAD_X   = 120;
-const PAD_Y   = 100;
-
-// ── TREE LAYOUT ──────────────────────────────────────────────
-// "head" = person WITH a parentId (the family's child).
-// Married-in spouses have no parentId; they attach to the head.
-// Root = head with no parentId (or the founding couple, both without parentId).
-
 function isHead(id) {
   const p = byId(id);
   if (!p) return false;
   if (p.parentId) return true;
-  // No parentId: root if spouse also has no parentId (or no spouse)
   if (!p.spouseId) return true;
   const sp = byId(p.spouseId);
   return !sp || !sp.parentId;
@@ -95,12 +120,17 @@ function isHead(id) {
 function headChildren(headId) {
   const h = byId(headId);
   if (!h) return [];
-  // Children are those whose parentId === headId OR headId's spouseId
   const spId = h.spouseId;
   return people.filter(p =>
     isHead(p.id) && (p.parentId === headId || (spId && p.parentId === spId))
   );
 }
+
+// ── LAYOUT ───────────────────────────────────────────────────
+const SLOT_W = 230;
+const GEN_H  = 190;
+const PAD_X  = 120;
+const PAD_Y  = 100;
 
 function computeLayout() {
   const heads = people.filter(p => isHead(p.id));
@@ -109,11 +139,11 @@ function computeLayout() {
     if (!h.spouseId) return true;
     const sp = byId(h.spouseId);
     if (!sp) return true;
-    if (sp.parentId) return false;   // married-in spouse → not a root
-    return h.id < sp.id;             // both rootless couple → only lower id is root
+    if (sp.parentId) return false;
+    return h.id < sp.id;
   });
 
-  // Assign generation depth via BFS
+  // BFS depth (only visible nodes)
   const depth = {};
   const queue = roots.map(r => ({ id: r.id, d: 0 }));
   const visited = new Set();
@@ -122,28 +152,29 @@ function computeLayout() {
     if (visited.has(id)) continue;
     visited.add(id);
     depth[id] = d;
-    headChildren(id).forEach(ch => {
-      if (!visited.has(ch.id)) queue.push({ id: ch.id, d: d + 1 });
-    });
+    if (expanded.has(id)) {
+      headChildren(id).forEach(ch => {
+        if (!visited.has(ch.id)) queue.push({ id: ch.id, d: d + 1 });
+      });
+    }
   }
 
-  // Count leaves (for centering parents)
+  // Leaf count (visible only)
   const leafCount = {};
   function countLeaves(id) {
     if (id in leafCount) return leafCount[id];
-    const kids = headChildren(id);
+    const kids = expanded.has(id) ? headChildren(id) : [];
     leafCount[id] = kids.length === 0 ? 1 : kids.reduce((s, k) => s + countLeaves(k.id), 0);
     return leafCount[id];
   }
   roots.forEach(r => countLeaves(r.id));
 
-  // Assign x positions
+  // Assign X
   const pos = {};
   let cursor = PAD_X;
-
   function assignX(id) {
     const d = depth[id] ?? 0;
-    const kids = headChildren(id);
+    const kids = expanded.has(id) ? headChildren(id) : [];
     if (kids.length === 0) {
       pos[id] = { x: cursor, y: PAD_Y + d * GEN_H };
       cursor += SLOT_W;
@@ -156,13 +187,11 @@ function computeLayout() {
   }
   roots.forEach(r => assignX(r.id));
 
-  // Copy position to married-in spouses
+  // Copy pos to married-in spouses
   const allPos = { ...pos };
   people.forEach(p => {
     if (allPos[p.id]) return;
-    if (p.spouseId && allPos[p.spouseId]) {
-      allPos[p.id] = allPos[p.spouseId];
-    }
+    if (p.spouseId && allPos[p.spouseId]) allPos[p.id] = allPos[p.spouseId];
   });
 
   return allPos;
@@ -173,10 +202,15 @@ const wrap   = document.getElementById('canvasWrap');
 const canvas = document.getElementById('canvas');
 
 const isMobile = () => window.innerWidth <= 700;
-let scale = isMobile() ? 0.45 : 0.85;
-let tx = isMobile() ? 10 : 80;
-let ty = isMobile() ? 30 : 40;
+let scale = isMobile() ? 0.9 : 0.95;
+let tx = 0, ty = 0;
 let dragging = false, lastX = 0, lastY = 0;
+
+function centerView() {
+  const r = wrap.getBoundingClientRect();
+  tx = r.width / 2 - PAD_X * scale;
+  ty = r.height / 2 - PAD_Y * scale;
+}
 
 function applyTransform() {
   canvas.style.transform = `translate(${tx}px,${ty}px) scale(${scale})`;
@@ -184,9 +218,8 @@ function applyTransform() {
   if (el) el.textContent = Math.round(scale * 100) + '%';
 }
 
-// ── MOUSE ──
 wrap.addEventListener('mousedown', e => {
-  if (e.target.closest('.person-card,.panel,.modal-overlay,.header,.legend,.minimap')) return;
+  if (e.target.closest('.person-card,.heart-btn,.expand-btn,.panel,.modal-overlay,.header,.legend,.minimap')) return;
   dragging = true; lastX = e.clientX; lastY = e.clientY;
   wrap.style.cursor = 'grabbing';
 });
@@ -208,17 +241,13 @@ wrap.addEventListener('wheel', e => {
   applyTransform();
 }, { passive: false });
 
-// ── TOUCH ──
+// Touch
 let touches = {};
 let lastPinchDist = null;
-let touchMoved = false;
 
 wrap.addEventListener('touchstart', e => {
   if (e.target.closest('.panel,.modal-overlay,.header,.legend,.minimap')) return;
-  touchMoved = false;
-  [...e.changedTouches].forEach(t => {
-    touches[t.identifier] = { x: t.clientX, y: t.clientY };
-  });
+  [...e.changedTouches].forEach(t => { touches[t.identifier] = { x: t.clientX, y: t.clientY }; });
   if (e.touches.length === 2) {
     const a = e.touches[0], b = e.touches[1];
     lastPinchDist = Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY);
@@ -227,31 +256,19 @@ wrap.addEventListener('touchstart', e => {
 
 wrap.addEventListener('touchmove', e => {
   e.preventDefault();
-  touchMoved = true;
-
   if (e.touches.length === 1) {
-    // Single finger — pan
-    const t = e.touches[0];
-    const prev = touches[t.identifier];
-    if (prev) {
-      tx += t.clientX - prev.x;
-      ty += t.clientY - prev.y;
-      applyTransform();
-    }
+    const t = e.touches[0], prev = touches[t.identifier];
+    if (prev) { tx += t.clientX - prev.x; ty += t.clientY - prev.y; applyTransform(); }
     touches[t.identifier] = { x: t.clientX, y: t.clientY };
-
   } else if (e.touches.length === 2) {
-    // Two fingers — pinch zoom
     const a = e.touches[0], b = e.touches[1];
     const dist = Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY);
     if (lastPinchDist) {
       const f = dist / lastPinchDist;
-      const cx = (a.clientX + b.clientX) / 2;
-      const cy = (a.clientY + b.clientY) / 2;
-      const r  = wrap.getBoundingClientRect();
-      const mx = cx - r.left, my = cy - r.top;
-      tx = mx - (mx - tx) * f;
-      ty = my - (my - ty) * f;
+      const r = wrap.getBoundingClientRect();
+      const mx = (a.clientX + b.clientX) / 2 - r.left;
+      const my = (a.clientY + b.clientY) / 2 - r.top;
+      tx = mx - (mx - tx) * f; ty = my - (my - ty) * f;
       scale = Math.min(2.5, Math.max(0.15, scale * f));
       applyTransform();
     }
@@ -265,45 +282,54 @@ wrap.addEventListener('touchend', e => {
   if (e.touches.length < 2) lastPinchDist = null;
 }, { passive: true });
 
-// ── BUTTONS ──
 document.getElementById('btnZoomIn').onclick  = () => { scale = Math.min(2.5, scale * 1.2); applyTransform(); };
 document.getElementById('btnZoomOut').onclick = () => { scale = Math.max(0.15, scale * 0.83); applyTransform(); };
-document.getElementById('btnReset').onclick   = () => {
-  scale = isMobile() ? 0.45 : 0.85;
-  tx = isMobile() ? 10 : 80;
-  ty = isMobile() ? 30 : 40;
-  applyTransform();
-};
+document.getElementById('btnReset').onclick   = () => { scale = isMobile() ? 0.9 : 0.95; centerView(); applyTransform(); };
 
 // ── RENDER ───────────────────────────────────────────────────
 function render() {
+  const wasVisible = new Set(prevVisibleHeads);
+  const wasLines   = new Set(prevLines);
+  const newLines   = new Set();
+
   const nodesEl = document.getElementById('nodes');
   const svgEl   = document.getElementById('svgLines');
   nodesEl.innerHTML = '';
   svgEl.innerHTML   = '';
 
   let pos;
-  try { pos = computeLayout(); }
-  catch(e) { console.error('Layout error:', e); return; }
+  try { pos = computeLayout(); } catch(e) { console.error(e); return; }
 
-  // ── SVG Lines ──
-  people.forEach(p => {
-    if (!isHead(p.id)) return;
-    const pPos = pos[p.id];
+  // keep the clicked node visually in place
+  if (anchorId != null && pos[anchorId]) {
+    tx += (anchorOldX - pos[anchorId].x) * scale;
+    ty += (anchorOldY - pos[anchorId].y) * scale;
+    anchorId = null;
+  }
+
+  const heads = people.filter(p => isHead(p.id));
+
+  // ── SVG lines (visible only) ──
+  heads.forEach(h => {
+    if (!isVisible(h.id) || !expanded.has(h.id)) return;
+    const pPos = pos[h.id];
     if (!pPos) return;
-
-    headChildren(p.id).forEach(ch => {
+    headChildren(h.id).forEach(ch => {
+      if (!isVisible(ch.id)) return;
       const cPos = pos[ch.id];
       if (!cPos) return;
-      const x1 = pPos.x, y1 = pPos.y + 32;
-      const x2 = cPos.x, y2 = cPos.y - 32;
+      const x1 = pPos.x, y1 = pPos.y + 34;
+      const x2 = cPos.x, y2 = cPos.y - 34;
       const mid = (y1 + y2) / 2;
       const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
       path.setAttribute('d', `M${x1},${y1} C${x1},${mid} ${x2},${mid} ${x2},${y2}`);
       path.setAttribute('fill', 'none');
       path.setAttribute('stroke', '#8b6a50');
       path.setAttribute('stroke-width', '2');
-      path.setAttribute('stroke-opacity', '0.5');
+      path.setAttribute('stroke-opacity', '0.45');
+      const lineKey = `${h.id}-${ch.id}`;
+      if (!wasLines.has(lineKey)) path.classList.add('line-enter');
+      newLines.add(lineKey);
       svgEl.appendChild(path);
     });
   });
@@ -311,60 +337,118 @@ function render() {
   // ── Nodes ──
   const rendered = new Set();
 
-  people.forEach(p => {
-    if (rendered.has(p.id)) return;
-    const pPos = pos[p.id];
-    if (!pPos) return;
+  heads.forEach(h => {
+    if (!isVisible(h.id)) return;
+    if (rendered.has(h.id)) return;
+    const hPos = pos[h.id];
+    if (!hPos) return;
 
-    const sp = p.spouseId ? byId(p.spouseId) : null;
-    const hasVisibleSpouse = sp && pos[sp.id];
+    const kids    = headChildren(h.id);
+    const hasKids = kids.length > 0;
+    const isNew   = !wasVisible.has(h.id);
 
-    if (hasVisibleSpouse && !rendered.has(sp.id)) {
-      // Render couple — show the "head" member second if they have parentId (more natural)
-      // Convention: male on left
-      const [left, right] = p.gender === 'male' ? [p, sp] : [sp, p];
-      rendered.add(p.id);
-      rendered.add(sp.id);
+    if (h.spouseId && pos[h.spouseId]) {
+      // ── COUPLE ──
+      rendered.add(h.id);
+      rendered.add(h.spouseId);
+      const sp = byId(h.spouseId);
 
       const wrapper = document.createElement('div');
-      wrapper.style.cssText = `position:absolute;left:${pPos.x}px;top:${pPos.y}px;
-        transform:translate(-50%,-50%);display:flex;align-items:flex-start;gap:6px;`;
+      wrapper.style.cssText = `position:absolute;left:${hPos.x}px;top:${hPos.y}px;
+        transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:0;`;
+      if (isNew) wrapper.classList.add('node-enter');
 
-      const isRoot = isHead(p.id) && !p.parentId && !sp.parentId;
-      if (isRoot) {
+      // Root badge
+      if (!parentHeadMap[h.id]) {
         const badge = document.createElement('div');
-        badge.style.cssText = `position:absolute;top:-20px;left:50%;transform:translateX(-50%);
-          background:#c9943a;color:#fff;font-size:10px;font-weight:800;padding:2px 10px;
-          border-radius:20px;white-space:nowrap;pointer-events:none;`;
+        badge.style.cssText = `background:#c9943a;color:#fff;font-size:10px;font-weight:800;
+          padding:2px 10px;border-radius:20px;white-space:nowrap;margin-bottom:6px;`;
         badge.textContent = 'Бабушка и Дедушка';
         wrapper.appendChild(badge);
       }
 
-      wrapper.appendChild(makeCard(left));
-      const heart = document.createElement('div');
-      heart.style.cssText = 'color:#c96880;font-size:1rem;margin-top:20px;flex-shrink:0;';
-      heart.textContent = '♥';
-      wrapper.appendChild(heart);
-      wrapper.appendChild(makeCard(right));
+      // Couple row: [card] [heart] [card]
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:flex-start;gap:4px;';
+
+      const [left, right] = h.gender === 'male' ? [h, sp] : [sp, h];
+      row.appendChild(makeCard(left));
+
+      // ── HEART BUTTON ──
+      const heartBtn = document.createElement('button');
+      heartBtn.className = 'heart-btn' + (hasKids ? (expanded.has(h.id) ? ' heart-btn--open' : ' heart-btn--closed') : ' heart-btn--no-kids');
+      heartBtn.innerHTML = hasKids
+        ? (expanded.has(h.id) ? '♥' : '♡')
+        : '♥';
+      heartBtn.title = hasKids
+        ? (expanded.has(h.id) ? 'Скрыть детей' : 'Показать детей')
+        : '';
+      if (hasKids) {
+        heartBtn.addEventListener('click', e => {
+          e.stopPropagation();
+          setAnchor(h.id);
+          if (expanded.has(h.id)) { collapseAll(h.id); } else { expanded.add(h.id); }
+          render();
+        });
+        heartBtn.addEventListener('touchend', e => {
+          e.preventDefault();
+          e.stopPropagation();
+          setAnchor(h.id);
+          if (expanded.has(h.id)) { collapseAll(h.id); } else { expanded.add(h.id); }
+          render();
+        });
+      }
+
+      row.appendChild(heartBtn);
+      row.appendChild(makeCard(right));
+      wrapper.appendChild(row);
       nodesEl.appendChild(wrapper);
 
-    } else if (!rendered.has(p.id)) {
-      rendered.add(p.id);
+    } else {
+      // ── SINGLE ──
+      rendered.add(h.id);
       const wrapper = document.createElement('div');
-      wrapper.style.cssText = `position:absolute;left:${pPos.x}px;top:${pPos.y}px;
-        transform:translate(-50%,-50%);`;
-      wrapper.appendChild(makeCard(p));
+      wrapper.style.cssText = `position:absolute;left:${hPos.x}px;top:${hPos.y}px;
+        transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:4px;`;
+      if (isNew) wrapper.classList.add('node-enter');
+      wrapper.appendChild(makeCard(h));
+
+      // Expand button for single with children
+      if (hasKids) {
+        const expBtn = document.createElement('button');
+        expBtn.className = 'expand-btn' + (expanded.has(h.id) ? ' expand-btn--open' : '');
+        expBtn.textContent = expanded.has(h.id) ? '▲' : '▼';
+        expBtn.title = expanded.has(h.id) ? 'Скрыть детей' : 'Показать детей';
+        const toggle = e => {
+          e.preventDefault(); e.stopPropagation();
+          setAnchor(h.id);
+          if (expanded.has(h.id)) { collapseAll(h.id); } else { expanded.add(h.id); }
+          render();
+        };
+        expBtn.addEventListener('click', toggle);
+        expBtn.addEventListener('touchend', toggle);
+        wrapper.appendChild(expBtn);
+      }
+
       nodesEl.appendChild(wrapper);
     }
   });
 
+  prevVisibleHeads = new Set(people.filter(p => isHead(p.id) && isVisible(p.id)).map(p => p.id));
+  prevLines = newLines;
+
   applyTransform();
 }
 
+// ── PERSON CARD ──────────────────────────────────────────────
 function makeCard(person) {
+  // married-in: no parentId, has spouseId whose partner IS a family member
+  const isMarriedIn = !person.parentId && !!person.spouseId && !!(byId(person.spouseId)?.parentId);
+
   const card = document.createElement('div');
   card.className = `person-card person-card--${person.gender}` +
     (person.death ? ' person-card--deceased' : '') +
+    (isMarriedIn ? ' person-card--married-in' : '') +
     (selectedId === person.id ? ' selected' : '');
   card.dataset.id = person.id;
 
@@ -386,7 +470,17 @@ function makeCard(person) {
     card.appendChild(yrEl);
   }
 
+  if (isMarriedIn) {
+    const tag = document.createElement('div');
+    tag.className = 'person-card__tag';
+    tag.textContent = 'жұбай';
+    card.appendChild(tag);
+  }
+
   card.addEventListener('click', e => { e.stopPropagation(); openPanel(person.id); });
+  card.addEventListener('touchend', e => {
+    e.preventDefault(); e.stopPropagation(); openPanel(person.id);
+  });
   return card;
 }
 
@@ -399,13 +493,12 @@ function openPanel(id) {
 
   document.getElementById('panelAvatar').className = `panel__avatar panel__avatar--${person.gender}`;
   document.getElementById('panelAvatar').textContent = emoji(person.gender);
-  document.getElementById('panelName').textContent  = person.name;
-  document.getElementById('panelYear').textContent  = yearLabel(person);
-  document.getElementById('panelMeta').textContent  = person.note || 'Нет описания';
+  document.getElementById('panelName').textContent = person.name;
+  document.getElementById('panelYear').textContent = yearLabel(person);
+  document.getElementById('panelMeta').textContent = person.note || 'Нет описания';
 
   const relBox = document.getElementById('panelRelations');
   relBox.innerHTML = '';
-
   if (person.spouseId) { const sp = byId(person.spouseId); if (sp) addRel(relBox, 'Супруг(а)', sp); }
   if (person.parentId) {
     const par = byId(person.parentId);
@@ -418,7 +511,7 @@ function openPanel(id) {
         .forEach(ch => addRel(relBox, 'Ребёнок', ch));
 
   document.getElementById('panel').classList.add('open');
-  wrap.classList.add('panel-open');
+  document.getElementById('canvasWrap').classList.add('panel-open');
   document.getElementById('panelEdit').onclick     = () => openModal('edit', id);
   document.getElementById('panelAddChild').onclick = () => openModal('child', id);
 }
@@ -427,7 +520,7 @@ function addRel(box, label, person) {
   const row = document.createElement('div');
   row.className = 'panel__rel-row';
   const lbl = document.createElement('span'); lbl.className = 'panel__rel-label'; lbl.textContent = label;
-  const nm  = document.createElement('span'); nm.className  = 'panel__rel-name';  nm.textContent = person.name;
+  const nm  = document.createElement('span'); nm.className  = 'panel__rel-name';  nm.textContent  = person.name;
   nm.onclick = () => openPanel(person.id);
   row.appendChild(lbl); row.appendChild(nm);
   box.appendChild(row);
@@ -435,7 +528,7 @@ function addRel(box, label, person) {
 
 document.getElementById('panelClose').onclick = () => {
   document.getElementById('panel').classList.remove('open');
-  wrap.classList.remove('panel-open');
+  document.getElementById('canvasWrap').classList.remove('panel-open');
   selectedId = null; render();
 };
 
@@ -444,7 +537,6 @@ function openModal(mode, targetId) {
   document.getElementById('memberForm').reset();
   document.getElementById('fId').value = '';
   document.getElementById('fParentId').value = '';
-
   if (mode === 'add') {
     document.getElementById('modalTitle').textContent = 'Добавить человека';
   } else if (mode === 'child') {
@@ -467,9 +559,7 @@ const closeModal = () => document.getElementById('modalOverlay').classList.remov
 document.getElementById('btnAddMember').onclick = () => openModal('add');
 document.getElementById('modalClose').onclick   = closeModal;
 document.getElementById('modalCancel').onclick  = closeModal;
-document.getElementById('modalOverlay').addEventListener('click', e => {
-  if (e.target === e.currentTarget) closeModal();
-});
+document.getElementById('modalOverlay').addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(); });
 
 document.getElementById('memberForm').addEventListener('submit', e => {
   e.preventDefault();
@@ -481,11 +571,9 @@ document.getElementById('memberForm').addEventListener('submit', e => {
   const gender   = document.getElementById('fGender').value;
   const note     = document.getElementById('fNote').value.trim();
   if (!name) return;
-  if (id) {
-    Object.assign(byId(id), { name, birth, death, gender, note });
-  } else {
-    people.push({ id: nextId++, name, birth, death, gender, note, spouseId: null, parentId });
-  }
+  if (id) { Object.assign(byId(id), { name, birth, death, gender, note }); }
+  else { people.push({ id: nextId++, name, birth, death, gender, note, spouseId: null, parentId }); }
+  buildParentMap();
   closeModal();
   render();
   if (selectedId) openPanel(selectedId);
@@ -494,10 +582,11 @@ document.getElementById('memberForm').addEventListener('submit', e => {
 // ── MINIMAP ──────────────────────────────────────────────────
 const mm = document.createElement('div');
 mm.className = 'minimap';
-mm.innerHTML = `<div style="font-size:.7rem;color:#8b6a50">Масштаб</div>
-                <div class="minimap__zoom">85%</div>`;
+mm.innerHTML = `<div style="font-size:.68rem;color:#8b6a50">Масштаб</div><div class="minimap__zoom">95%</div>`;
 document.body.appendChild(mm);
 
 // ── INIT ─────────────────────────────────────────────────────
+buildParentMap();
+centerView();
 render();
 applyTransform();
