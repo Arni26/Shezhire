@@ -3,27 +3,28 @@
 // ============================================================
 
 let people = [
-  { id: 1,  name: 'Ниязхан',  birth: 1942, death: null, gender: 'male',   note: 'Основатель рода', spouseId: 2,  parentId: null },
+  { id: 1,  name: 'Ниязхан',  birth: 1942, death: null, gender: 'male',   note: '', spouseId: 2,  parentId: null },
   { id: 2,  name: 'Ақыш',    birth: 1946, death: null, gender: 'female', note: '',                spouseId: 1,  parentId: null },
 
-  { id: 3,  name: 'Айгул',    birth: 1960, death: null, gender: 'female', note: '', spouseId: 4,  parentId: 1 },
+  { id: 3,  name: 'Айгул',    birth: 1970, death: null, gender: 'female', note: '', spouseId: 4,  parentId: 1 },
   { id: 4,  name: 'Бауыржан', birth: 1972, death: null, gender: 'male',   note: '', spouseId: 3,  parentId: null },
-  { id: 5,  name: 'Бақытгүл',  birth: 1962, death: null, gender: 'female', note: '', spouseId: null, parentId: 1 },
+  { id: 5,  name: 'Бақытгүл',  birth: 1972, death: null, gender: 'female', note: '', spouseId: null, parentId: 1 },
   { id: 6,  name: 'Алмас',    birth: 1973, death: null, gender: 'male',   note: '', spouseId: 7,  parentId: 1 },
   { id: 7,  name: 'Лаззат',   birth: 1974, death: null, gender: 'female', note: '', spouseId: 6,  parentId: null },
-  { id: 8,  name: 'Наргүл',   birth: 1968, death: null, gender: 'female', note: '', spouseId: 9,  parentId: 1 },
-  { id: 9,  name: 'Сәкен',    birth: 1966, death: null, gender: 'male',   note: '', spouseId: 8,  parentId: null },
+  { id: 8,  name: 'Наргүл',   birth: 1975, death: null, gender: 'female', note: '', spouseId: 9,  parentId: 1 },
+  { id: 9,  name: 'Сәкен',    birth: 1975, death: null, gender: 'male',   note: '', spouseId: 8,  parentId: null },
   { id: 10, name: 'Берік',    birth: 1977, death: null, gender: 'male',   note: '', spouseId: 11, parentId: 1 },
   { id: 11, name: 'Жұлдыз',   birth: 1981, death: null, gender: 'female', note: '', spouseId: 10, parentId: null },
   { id: 12, name: 'Серік',    birth: 1979, death: null, gender: 'male',   note: '', spouseId: 13, parentId: 1 },
   { id: 13, name: 'Әсел',      birth: 1981, death: null, gender: 'female', note: '', spouseId: 12, parentId: null },
   { id: 14, name: 'Әсемгүл',    birth: 1987, death: null, gender: 'female', note: '', spouseId: null, parentId: 1 },
 
+
   // Дети Айгул
   { id: 15, name: 'Ертөре',   birth: 1993, death: null, gender: 'male',   note: '', spouseId: null, parentId: 3 },
   { id: 16, name: 'Балауса',  birth: 1995, death: null, gender: 'female', note: '', spouseId: null, parentId: 3 },
   { id: 17, name: 'Нуржан',   birth: 2000, death: null, gender: 'male',   note: '', spouseId: null, parentId: 3 },
-  { id: 18, name: 'Аяулым',  birth: 2004, death: null, gender: 'female', note: '', spouseId: null, parentId: 3 },
+  { id: 18, name: 'Аяулым',  birth: 2011, death: null, gender: 'female', note: '', spouseId: null, parentId: 3 },
 
   // Дети Алмас
   { id: 19, name: 'Алмат',  birth: 1993, death: null, gender: 'male',   note: '', spouseId: null, parentId: 6 },
@@ -49,7 +50,7 @@ let people = [
   { id: 28, name: 'Жулдызай', birth: 2017, death: null, gender: 'female', note: '', spouseId: null, parentId: 8 },
 
   // Дети Берік
-  { id: 33, name: 'Дания',    birth: 2006, death: null, gender: 'female', note: '', spouseId: null, parentId: 12 },
+  { id: 33, name: 'Дания',    birth: 2006, death: null, gender: 'female', note: 'The most beautiful girl', spouseId: null, parentId: 12 },
   { id: 34, name: 'Аида',     birth: 2010, death: null, gender: 'female', note: '', spouseId: null, parentId: 12 },
   { id: 35, name: 'Нұркен',    birth: 2012, death: null, gender: 'male',   note: '', spouseId: null, parentId: 12 },
   { id: 36, name: 'Ерлен',    birth: 2014, death: null, gender: 'male',   note: '', spouseId: null, parentId: 12 },
